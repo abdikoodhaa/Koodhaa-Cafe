@@ -1,18 +1,34 @@
+import express from 'express';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import Admin from '../models/Admin.js';
 
-export const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+const router = express.Router();
 
-  if (!token) {
-    return res.status(401).json({ error: 'Access denied' });
-  }
-
+router.post('/login', async (req, res) => {
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
-    next();
+    const { email, password } = req.body;
+    
+    const admin = await Admin.findOne({ email });
+    if (!admin) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    const validPassword = await bcrypt.compare(password, admin.password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { id: admin._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.json({ token });
   } catch (error) {
-    res.status(403).json({ error: 'Invalid token' });
+    res.status(500).json({ error: error.message });
   }
-};
+});
+
+export default router;
